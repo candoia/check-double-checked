@@ -1,6 +1,3 @@
-# check-double-checked
-Double-checked locking  idiom checker
-
 # Candoia app: Double-checked locking  idiom checker
 Checks and warns against the used of doubled-checked locking idiom in the project. To run add this app to your Candoia installation.
 
