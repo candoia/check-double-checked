@@ -1,0 +1,113 @@
+# double-checked locking bug detection.
+DC_lock_bugs: output sum of int;
+#out: output collection[string][string][string] of string;
+out : output collection[string][string] of string;
+
+counts := 0;
+
+cur_file: string;
+cur_method: string;
+
+first_null_check := false;
+second_null_check := false;
+alsoAssigned := false;
+fields: set of string;
+fvar := "";
+svar := "";
+
+visit(input, visitor {
+    before node: CodeRepository -> {
+        snapshot := getsnapshot(node, "SOURCE_JAVA_JLS"); 
+        foreach (i: int; def(snapshot[i]))
+        visit(snapshot[i]);
+        stop;
+    }
+    
+    before node: Declaration -> {
+        # check all fields
+        foreach (i: int; node.fields[i]) {
+           field := node.fields[i].name;
+           add(fields, field);
+        }
+            #visit(node.fields[i]);
+    }
+    
+    after node : Declaration -> {
+        clear(fields);    
+    }
+    
+    before node: Statement -> {
+        first_null_check = false;
+        second_null_check = false;
+        alsoAssigned = false;
+        svar = "";
+        fvar = "";
+        if (node.kind == StatementKind.IF) {
+            visit(node.expression, visitor {
+                before expr: Expression ->
+                    if (expr.kind == ExpressionKind.EQ) {
+                       foreach (i : int; def(expr.expressions[i])) {
+                           if (expr.expressions[i].kind == ExpressionKind.VARACCESS) {
+                               if (contains(fields, expr.expressions[i].variable)) {
+                                   fvar = expr.expressions[i].variable;
+                                }
+                           } else if (isliteral(expr.expressions[i], "null")) {
+                               first_null_check = true;    
+                           }
+                       }
+                    }
+            });
+            if (first_null_check) {
+               foreach (i : int; def(node.statements[i])) {
+                   stmt := node.statements[i];
+                   if (stmt.kind == StatementKind.SYNCHRONIZED) {
+                       foreach (j : int; def(stmt.statements[j])) {
+                           stmt2 := stmt.statements[j];
+                           if (stmt2.kind == StatementKind.IF) {
+                               visit(stmt2.expression, visitor {
+                                   before node: Expression ->
+                                       if (node.kind == ExpressionKind.EQ) {
+                                           foreach (i : int; def(node.expressions[i])) {
+                                               if (node.expressions[i].kind == ExpressionKind.VARACCESS) {
+                                                   if (contains(fields, node.expressions[i].variable)) {
+                                                      svar = node.expressions[i].variable;
+                                                   }
+                                               } else if (isliteral(node.expressions[i], "null")) {
+                                                   second_null_check = true;
+                                               }
+                                           }
+                                       }
+                               });   
+                              if (first_null_check && second_null_check) {
+                                    foreach (k : int; def(stmt2.statements[k])) {
+                                        if (stmt2.statements[k].kind == StatementKind.EXPRESSION && 
+                                            stmt2.statements[k].expression.kind == ExpressionKind.ASSIGN) {
+                                            exprVar := stmt2.statements[k].expression;   
+                                            foreach (z : int; def(exprVar.expressions[z])) {
+                                                if (exprVar.expressions[z].kind == ExpressionKind.VARACCESS) {
+                                                    varName := exprVar.expressions[z].variable;    
+                                                    if (match(varName, fvar) && match(varName,svar))
+                                                        alsoAssigned = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                           }
+                       }
+                   }
+               }
+            }
+        }
+        if (first_null_check && second_null_check && !match(svar,"") && !match(fvar,"") && alsoAssigned)
+            out[input.project_url][cur_file] << cur_method;
+            #counts++;
+            #out[input.project_url][cur_file][cur_method] << format("%s", node);
+    }
+
+    before node: ChangedFile -> cur_file = node.name;
+    before node: Method -> cur_method = node.name;
+});
+
+#if (counts > 0)
+#    out[input.project_url] << counts;
