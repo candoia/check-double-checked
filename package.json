@@ -1,6 +1,6 @@
 {
-  "name": "check doubled-checked",
-  "productName": "Double-checked locking  idiom checker",
+  "name": "check-doubled-checked",
+  "productName": "Double-checked Locking Idiom Checker",
   "version": "0.1.0",
   "author": "Ganesha Upadhyaya <ganeshau@iastate.edu>",
   "description": "Checks and warns against the used of doubled-checked locking idiom",
@@ -10,7 +10,7 @@
     "url": "https://github.com/candoia/check-double-checked"
   },
   "icon": {
-	"type": "fa",
-	"name": "list"
+    "type": "fa",
+    "name": "list"
   }
 }
